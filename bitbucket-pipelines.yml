@@ -1,0 +1,167 @@
+image: atlassian/default-image:3
+
+definitions:
+  caches:
+    playwright: ~/.cache/ms-playwright
+  services:
+    postgres:
+      image: postgres:16
+      environment:
+        POSTGRES_DB: summarizer
+        POSTGRES_USER: postgres
+        POSTGRES_PASSWORD: sql  
+
+pipelines:
+  branches:
+    main:
+      - parallel:
+        - step:
+            name: 'Backend Building'
+            image: python:3.12
+            caches:
+              - pip
+            script:
+              - cd backend
+              - python -m venv .venv
+              - source .venv/bin/activate
+              - pip install -r requirements.txt
+              - echo "Backend dependencies installed successfully."
+
+        - step:
+            name: 'Unit Testing'
+            image: python:3.12
+            services:
+              - postgres
+            caches:
+              - pip
+            script:
+              - cd backend
+              - python -m venv .venv
+              - source .venv/bin/activate
+              - pip install -r requirements.txt
+              - pip install requests pytest 
+
+              # Setup Test Environment Variables
+              - export ENV=TEST
+              - export DATABASE_URL=postgresql://postgres:sql@localhost:5432/summarizer
+              - export OPENAI_API_KEY="mock-key"
+              - export HF_API_KEY="mock-key"
+              - export PYTHONPATH=$PYTHONPATH:$(pwd)
+
+              # --- TEST 1: Database Integration ---
+              - echo "Running Database Test..."
+              - python test_db.py
+
+              # --- TEST 2: API Integration ---
+              - echo "Starting Background Server for API Test..."
+              # Start uvicorn in the background using nohup
+              - nohup uvicorn main:app --host 0.0.0.0 --port 8000 > uvicorn.log 2>&1 &
+              - sleep 10  
+
+              - echo "Running API Test..."
+              - python test_api.py
+              
+              - cat uvicorn.log
+        
+        - step:
+            name: 'Frontend Building'
+            image: node:20
+            caches:
+              - node
+            script:
+              - cd frontend
+              - npm ci
+              # This builds the frontend just to make sure there are no syntax errors.
+              - VITE_API_BASE="http://check-build:8000" npm run build 
+              - echo "Frontend built successfully."
+
+        - step:
+            name: 'E2E Testing'
+            image: mcr.microsoft.com/playwright:v1.56.1-jammy
+            services:
+              - docker
+            caches:
+              - node
+              - pip
+              - playwright
+            script:
+              # Install Docker Compose
+              - apt-get update && apt-get install -y curl
+              - curl -L "https://github.com/docker/compose/releases/download/v2.24.1/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+              - chmod +x /usr/local/bin/docker-compose
+
+              # Disable BuildKit to fix "privileged" error
+              - export DOCKER_BUILDKIT=0
+              - export COMPOSE_DOCKER_CLI_BUILD=0
+
+              - echo "Starting services..."
+              - docker-compose -f docker-compose.ci.yml up -d --build
+            
+              - echo "Waiting for services..."
+              - sleep 45
+            
+              - echo "Installing Test Dependencies..."
+
+              - npm ci
+
+              - echo "Running E2E tests..."
+              # Point to localhost:6702 because that's where Docker maps the backend
+              # Export API keys for docker-compose
+              - export OPENAI_API_KEY="$OPENAI_API_KEY"
+              - export HF_API_KEY="$HF_API_KEY"
+              - API_BASE_URL="http://localhost:6702" npx playwright test
+            
+            finally:
+              - echo "Tearing down services..."
+              - if [ -f /usr/local/bin/docker-compose ]; then docker-compose -f docker-compose.prod.yml down; fi      
+
+
+        - step:
+            name: 'Deployment to Production'
+            deployment: production
+            trigger: 'manual'
+            script:
+              - apt-get update && apt-get install -y sshpass openssh-client
+              - ssh-keyscan -H $SSH_HOST >> ~/.ssh/known_hosts
+              
+              # 1. Create a temporary .env file locally using Bitbucket Secrets
+              - echo "Generating .env file..."
+              - echo "POSTGRES_USER=postgres" >> .env
+              - echo "POSTGRES_PASSWORD=$POSTGRES_PASSWORD" >> .env
+              - echo "POSTGRES_DB=summarizer" >> .env
+              - echo "DATABASE_URL=$DATABASE_URL" >> .env
+              - echo "OPENAI_API_KEY=$OPENAI_API_KEY" >> .env
+              - echo "HF_API_KEY=$HF_API_KEY" >> .env
+              - echo "APP_VERSION=${BITBUCKET_COMMIT:0:7}" >> .env
+              
+              # 2. Copy the .env file to the server using SCP
+              - echo "Copying .env to server..."
+              - sshpass -p "$SSH_PASSWORD" scp .env $SSH_USER@$SSH_HOST:$SERVER_PROJECT_PATH/.env
+              
+              # 3. SSH in and Deploy
+              - |
+                sshpass -p "$SSH_PASSWORD" ssh $SSH_USER@$SSH_HOST "
+                echo ' ✅ Logged into server: $SSH_HOST'
+                cd $SERVER_PROJECT_PATH
+                
+                echo ' 🔄 Pulling latest code...'
+                git pull origin main
+
+                export APP_VERSION=\$(git rev-parse --short HEAD)
+                echo ' 📦 APP_VERSION='\"\$APP_VERSION\"
+
+                echo ' 🐳 Rebuilding services...'
+                # Set the API URL to the server's public IP or Domain
+                # This fills the ${VITE_API_BASE} variable in your docker-compose file
+                export VITE_API_BASE='http://$SSH_HOST:6702'
+                
+                docker compose -f docker-compose.prod.yml build --no-cache
+                docker compose -f docker-compose.prod.yml up -d --force-recreate
+
+                echo ' 🧪 Verifying APP_VERSION inside backend container...'
+                docker exec -i summary-backend sh -lc 'printenv | grep APP_VERSION || true'
+
+                echo ' 🧹 Cleaning up...'
+                docker image prune -f
+                echo ' 🚀 Deployment successful.'
+                "

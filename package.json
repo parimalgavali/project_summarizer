@@ -1,0 +1,13 @@
+{
+    "name": "summarizer-e2e",
+    "version": "1.0.0",
+    "description": "E2E Tests",
+    "scripts": {
+      "test": "playwright test"
+    },
+    "devDependencies": {
+      "@playwright/test": "^1.56.1",
+      "typescript": "^5.0.0",
+      "@types/node": "^20.0.0"
+    }
+  }

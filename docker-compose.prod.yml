@@ -1,0 +1,58 @@
+services:
+  # 1. Frontend Service (Nginx)
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        - VITE_API_BASE=${VITE_API_BASE}  
+    container_name: summary-frontend
+    restart: always
+    ports:
+      - "6701:80"  # Maps server port 6701 (HTTP) to container port 80
+    networks:
+      - summary-network
+
+  # 2. Backend Service (Python)
+  backend:
+    build:
+      context: ./backend
+    container_name: summary-backend
+    restart: always
+    env_file:
+      - ./.env
+    environment:
+      - APP_VERSION=${APP_VERSION}  
+    ports:
+      - "6702:8000" # Maps server port 6702 to container port 8000
+    volumes:
+      # Mount the 'uploads' folder to persist user uploads
+      - ./backend/uploads:/code/uploads
+    networks:
+      - summary-network
+    depends_on:
+      - postgres  # Postgres starts before the backend
+
+  # 3. Postgres Database Service
+  postgres:
+    image: postgres:16
+    container_name: summary-postgres
+    restart: always
+    env_file:
+      - ./.env
+    volumes:
+      # Use the custom named volume for persistent data
+      - summary-postgres-data:/var/lib/postgresql/data
+    ports:
+      - "6703:5432" # Exposes Postgres on the server (remove if not needed)
+    networks:
+      - summary-network
+
+# Define the custom volume
+volumes:
+  summary-postgres-data:
+    name: summary-postgres-data
+
+# Define the custom network
+networks:
+  summary-network:
+    name: summary-network
