@@ -14,7 +14,9 @@ import {
   getAllAudios,
   getAllDocuments,
   getAllSummaries,
+  getModels,
   regenerateSummary,
+  searchDocuments,
   updateApproval,
   type Audio,
   type DocumentRecord,
@@ -25,6 +27,8 @@ export const queryKeys = {
   documents: ["documents"] as const,
   summaries: ["summaries"] as const,
   audios: ["audios"] as const,
+  search: ["search"] as const,
+  models: ["models"] as const,
 };
 
 /** Stable fallback so effects depending on list data don't re-run every render. */
@@ -59,7 +63,29 @@ export function useAudios() {
   });
 }
 
-type ListKey = (typeof queryKeys)[keyof typeof queryKeys];
+/** Semantic search; disabled until there is a non-blank query. */
+export function useSearch(query: string) {
+  const q = query.trim();
+  return useQuery({
+    queryKey: [...queryKeys.search, q],
+    queryFn: () => searchDocuments(q),
+    enabled: q.length > 0,
+  });
+}
+
+/** Configured AI / TTS / embedding providers (static for a running backend). */
+export function useModels() {
+  return useQuery({
+    queryKey: queryKeys.models,
+    queryFn: getModels,
+    staleTime: Infinity,
+  });
+}
+
+type ListKey =
+  | typeof queryKeys.documents
+  | typeof queryKeys.summaries
+  | typeof queryKeys.audios;
 
 function updateList<T>(client: QueryClient, key: ListKey, update: (items: T[]) => T[]) {
   client.setQueryData<T[]>(key, (items) => (items ? update(items) : items));
@@ -90,7 +116,11 @@ function removeAudiosForSummaries(client: QueryClient, summaryIds: Set<string>) 
 
 export function useInvalidateDocuments() {
   const client = useQueryClient();
-  return () => client.invalidateQueries({ queryKey: queryKeys.documents });
+  return () =>
+    Promise.all([
+      client.invalidateQueries({ queryKey: queryKeys.documents }),
+      client.invalidateQueries({ queryKey: queryKeys.search }),
+    ]);
 }
 
 export function useUpsertSummary() {
@@ -103,6 +133,7 @@ export function useDeleteDocument() {
   return useMutation({
     mutationFn: deleteDocument,
     onSuccess: (_response, documentId: string) => {
+      client.invalidateQueries({ queryKey: queryKeys.search });
       const cachedSummaries = client.getQueryData<Summary[]>(queryKeys.summaries);
       updateList<DocumentRecord>(client, queryKeys.documents, (items) =>
         items.filter((doc) => doc.id !== documentId)

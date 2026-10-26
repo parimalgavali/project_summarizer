@@ -211,3 +211,36 @@ export async function generateAudioFromDocument(documentId: string, formatType: 
   });
   return res.data;
 }
+
+export interface SearchResult {
+  document_id: string;
+  document_filename: string;
+  score: number;
+  chunk_index: number;
+  snippet: string;
+  summary_count: number;
+  latest_summary_id: string | null;
+}
+
+export interface SearchResponse {
+  query: string;
+  data: SearchResult[];
+}
+
+export async function searchDocuments(query: string, limit: number = 10) {
+  const res = await axios.get<SearchResponse>(`${API_BASE}/search`, {
+    params: { q: query, limit },
+  });
+  return res.data;
+}
+
+export interface ModelsResponse {
+  data: { id: string; provider: "ollama" | "openai" | "huggingface" }[];
+  tts: { provider: "macos_say" | "openai"; model: string };
+  embedding: { model: string };
+}
+
+export async function getModels() {
+  const res = await axios.get<ModelsResponse>(`${API_BASE}/v1/models`);
+  return res.data;
+}
