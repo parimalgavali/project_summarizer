@@ -6,6 +6,7 @@ A comprehensive full-stack application designed to extract text from documents, 
 - **Backend**: FastAPI (Python), SQLAlchemy, and PostgreSQL. Handles document parsing (.pdf, .docx, .txt), summarization logic, audio generation (OpenAI TTS API), and API provisioning.
 - **Frontend**: React 19, TypeScript, and Vite. Provides an interactive dashboard with modular components (e.g. `AudioList`, `DocumentList`, `SummaryList`) and modal-driven UI for handling the document flows.
 - **Database**: PostgreSQL (Dockerized). Tracks document files, summaries with varying statuses (pending, approved, rejected), and audio references.
+- **Semantic search**: On upload, extracted text is chunked and embedded with Ollama (`embeddinggemma`); `GET /search?q=...` ranks documents by cosine similarity and the dashboard search bar links results to their summaries. See [project-docs/backend.md](project-docs/backend.md#semantic-search).
 - **Testing**: Playwright for end-to-end (E2E) testing (`tests-e2e`), Pytest for backend tests (`backend/tests`).
 
 ## Project links

@@ -18,7 +18,38 @@ Failures use a non-2xx status with a JSON body of the form `{"detail": ...}`. Un
 
 ### `GET /v1/models`
 
-Returns a lightweight model list. Kept for compatibility with model-list style clients.
+Returns a lightweight model list (kept for compatibility with model-list style clients) plus the configured TTS and embedding providers. The dashboard uses it for the "Summary engine" / "Audio engine" cards.
+
+```json
+{
+  "data": [{ "id": "llama3.2", "provider": "ollama" }],
+  "tts": { "provider": "macos_say", "model": "macos-say:Samantha" },
+  "embedding": { "model": "ollama:embeddinggemma" }
+}
+```
+
+## Search
+
+### `GET /search?q={query}&limit={limit}`
+
+Semantic search over uploaded documents. `q` is required (1-1000 chars, not blank); `limit` is 1-50 (default 10). Returns documents ranked by the cosine similarity of their best-matching chunk; `503` if the embedding service is unavailable.
+
+```json
+{
+  "query": "river sediment",
+  "data": [
+    {
+      "document_id": "…",
+      "document_filename": "rivers.txt",
+      "score": 0.82,
+      "chunk_index": 0,
+      "snippet": "Rivers carry sediment downstream…",
+      "summary_count": 1,
+      "latest_summary_id": "…"
+    }
+  ]
+}
+```
 
 ## Documents
 
@@ -93,7 +124,7 @@ Accepted statuses:
 
 ### `POST /summaries/{summary_id}/regenerate`
 
-Regenerates an existing summary with the same or a new format. Returns the updated summary plus `message`.
+Regenerates an existing summary with the same or a new format. Optional JSON body `{"format_type": "bullet_points"}` (`RegenerateRequest`; one of `general`, `short_text`, `bullet_points`, `academic_tone`); omit it to keep the current format. Unknown formats return `422`. Resets approval to `pending` and returns the updated summary plus `message`.
 
 ### `DELETE /summaries/{summary_id}`
 
