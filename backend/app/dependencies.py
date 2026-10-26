@@ -1,6 +1,7 @@
 from functools import lru_cache
 
 from .services.audio import AudioService
+from .services.embeddings import EmbeddingService
 from .services.summarization import SummarizationService
 from .services.text_extraction import TextExtractionService
 
@@ -18,3 +19,8 @@ def get_audio_service() -> AudioService:
 @lru_cache
 def get_text_extraction_service() -> TextExtractionService:
     return TextExtractionService()
+
+
+@lru_cache
+def get_embedding_service() -> EmbeddingService:
+    return EmbeddingService()

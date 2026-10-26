@@ -26,6 +26,12 @@ class SummarizeRequest(BaseModel):
     custom_text: Optional[str] = None
 
 
+class RegenerateRequest(BaseModel):
+    """Body for POST /summaries/{id}/regenerate; omit format_type to keep it."""
+
+    format_type: Optional[SummaryType] = None
+
+
 class SummaryResponse(BaseModel):
     id: str
     document_id: str
@@ -62,3 +68,18 @@ class AudioResponse(BaseModel):
     processing_time_seconds: float
     characters_processed: int
     created_at: str
+
+
+class SearchResult(BaseModel):
+    document_id: str
+    document_filename: str
+    score: float
+    chunk_index: int
+    snippet: str
+    summary_count: int
+    latest_summary_id: str | None = None
+
+
+class SearchResponse(BaseModel):
+    query: str
+    data: list[SearchResult]

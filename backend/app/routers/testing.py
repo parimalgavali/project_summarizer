@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Testing"])
 
-RESET_TABLES = ["audios", "summaries", "documents"]
+RESET_TABLES = ["audios", "summaries", "document_chunks", "documents"]
 
 
 def ensure_testing_environment():

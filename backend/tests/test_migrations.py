@@ -32,11 +32,17 @@ def test_migrations_create_full_schema():
     engine = create_engine(DATABASE_URL)
     inspector = inspect(engine)
 
-    assert {"documents", "summaries", "audios", "alembic_version"} <= set(
-        inspector.get_table_names()
-    )
+    assert {
+        "documents",
+        "summaries",
+        "audios",
+        "document_chunks",
+        "alembic_version",
+    } <= set(inspector.get_table_names())
     summary_columns = {c["name"] for c in inspector.get_columns("summaries")}
     assert {"approval_status", "custom_name"} <= summary_columns
+    chunk_columns = {c["name"] for c in inspector.get_columns("document_chunks")}
+    assert {"document_id", "chunk_index", "text", "embedding"} <= chunk_columns
     engine.dispose()
 
 
@@ -55,7 +61,7 @@ def test_initial_migration_adopts_legacy_database():
         inspector = inspect(engine)
         summary_columns = {c["name"] for c in inspector.get_columns("summaries")}
         assert {"approval_status", "custom_name"} <= summary_columns
-        assert "audios" in inspector.get_table_names()
+        assert {"audios", "document_chunks"} <= set(inspector.get_table_names())
         with engine.connect() as conn:
             row = conn.execute(
                 text("SELECT summary_text FROM summaries WHERE id = 'legacy-summary'")
@@ -63,7 +69,8 @@ def test_initial_migration_adopts_legacy_database():
         assert row.summary_text == "kept"
 
         command.downgrade(alembic_config(url), "base")
-        assert "summaries" not in inspect(engine).get_table_names()
+        remaining = set(inspect(engine).get_table_names())
+        assert not {"summaries", "document_chunks"} & remaining
     finally:
         engine.dispose()
         drop_database(url)

@@ -6,12 +6,26 @@ import SummaryList from "./components/SummaryList";
 import AudioList from "./components/AudioList";
 import DocumentSummariesModal from "./components/DocumentSummariesModal";
 import QueryStatus from "./components/QueryStatus";
+import SearchPanel from "./components/SearchPanel";
 import {
   EMPTY_LIST,
   useDocuments,
   useInvalidateDocuments,
+  useModels,
   useSummaries,
 } from "./lib/queries";
+import type { ModelsResponse } from "./lib/api";
+
+const AI_PROVIDER_LABELS: Record<ModelsResponse["data"][number]["provider"], string> = {
+  ollama: "Ollama",
+  openai: "OpenAI",
+  huggingface: "Hugging Face",
+};
+
+const TTS_PROVIDER_LABELS: Record<ModelsResponse["tts"]["provider"], string> = {
+  macos_say: "macOS say",
+  openai: "OpenAI TTS",
+};
 
 type ActiveTab = "documents" | "summaries" | "audio";
 
@@ -29,6 +43,13 @@ export default function App() {
   const documentsQuery = useDocuments();
   const summariesQuery = useSummaries();
   const invalidateDocuments = useInvalidateDocuments();
+  const modelsQuery = useModels();
+  const summaryModel = modelsQuery.data?.data[0];
+  const ttsModel = modelsQuery.data?.tts;
+  const providerFallback = modelsQuery.isError ? "Unavailable" : "—";
+  const providerDetailFallback = modelsQuery.isError
+    ? "Could not reach /v1/models"
+    : "Checking provider...";
   const documents = documentsQuery.data ?? EMPTY_LIST;
   const summaries = summariesQuery.data ?? EMPTY_LIST;
   const [documentFilter, setDocumentFilter] = useState<string | null>(null);
@@ -150,17 +171,21 @@ export default function App() {
             <strong>{summariesQuery.isPending ? "—" : summaries.length}</strong>
             <small>{approvedSummaries} approved outputs</small>
           </div>
-          <div className="metric-card">
+          <div className="metric-card" data-testid="summary-engine-card">
             <span>Summary engine</span>
-            <strong>Ollama</strong>
-            <small>Llama 3.2 local provider</small>
+            <strong>
+              {summaryModel ? AI_PROVIDER_LABELS[summaryModel.provider] : providerFallback}
+            </strong>
+            <small>{summaryModel ? summaryModel.id : providerDetailFallback}</small>
           </div>
-          <div className="metric-card">
+          <div className="metric-card" data-testid="audio-engine-card">
             <span>Audio engine</span>
-            <strong>macOS</strong>
-            <small>Built-in say command</small>
+            <strong>{ttsModel ? TTS_PROVIDER_LABELS[ttsModel.provider] : providerFallback}</strong>
+            <small>{ttsModel ? ttsModel.model : providerDetailFallback}</small>
           </div>
         </section>
+
+        <SearchPanel onOpenDocument={openDocumentSummariesModal} />
 
         <section className="workspace-panel">
           <div className="panel-heading">

@@ -6,9 +6,16 @@ from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from ..core.config import get_db, settings
-from ..dependencies import get_text_extraction_service
+from ..dependencies import (
+    get_embedding_service,
+    get_summarization_service,
+    get_text_extraction_service,
+)
 from ..models import UploadResponse
-from ..models.database import Audio, Document, Summary
+from ..models.database import Audio, Document, DocumentChunk, Summary
+from ..services.embeddings import EmbeddingService
+from ..services.search import embed_document_chunks, replace_document_chunks
+from ..services.summarization import SummarizationService
 from ..services.text_extraction import TextExtractionService
 from ..storage import save_upload
 from .common import (
@@ -30,12 +37,38 @@ def _ext_ok(name: str) -> bool:
     return any(name.lower().endswith(ext) for ext in ALLOWED_EXT)
 
 
+async def _index_document(
+    db: Session,
+    document_id: str,
+    text: str,
+    embedder: EmbeddingService,
+    summarizer: SummarizationService,
+) -> None:
+    """Store search embeddings; failures are logged so the upload still succeeds."""
+    try:
+        embedded = await run_in_threadpool(
+            embed_document_chunks, text, embedder, summarizer
+        )
+        replace_document_chunks(db, document_id, embedded, embedder.model_name)
+        db.commit()
+        logger.info("Indexed %d chunks for document %s", len(embedded), document_id)
+    except Exception:
+        db.rollback()
+        logger.warning(
+            "Embedding failed for document %s; it will not appear in search",
+            document_id,
+            exc_info=True,
+        )
+
+
 @router.post("/documents/upload", response_model=UploadResponse)
 async def upload_document(
     file: UploadFile = File(...),
     format_type: str = Form("short_text"),
     db: Session = Depends(get_db),
     text_extractor: TextExtractionService = Depends(get_text_extraction_service),
+    embedder: EmbeddingService = Depends(get_embedding_service),
+    summarizer: SummarizationService = Depends(get_summarization_service),
 ):
     validate_format_type(format_type)
 
@@ -70,6 +103,7 @@ async def upload_document(
         db.commit()
 
         if success:
+            await _index_document(db, doc_id, text, embedder, summarizer)
             return UploadResponse(
                 id=doc_id,
                 filename=file.filename,
@@ -141,6 +175,7 @@ def delete_document(document_id: str, db: Session = Depends(get_db)):
             delete_audio_record(db, audio)
         db.delete(summary)
 
+    db.query(DocumentChunk).filter(DocumentChunk.document_id == document_id).delete()
     db.delete(doc)
 
     if doc.file_path and os.path.exists(doc.file_path):

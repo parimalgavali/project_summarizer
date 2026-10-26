@@ -3,6 +3,7 @@
 Provider-based summarization service.
 """
 
+import re
 import time
 from typing import Any
 
@@ -20,6 +21,11 @@ try:
 except ImportError:  # Token counting falls back to a rough local estimate.
     tiktoken = None
 
+# Sentence end (., ! or ? then whitespace and a capital/digit/quote, so
+# abbreviations like "U.S. data" stay intact) or a line break.
+_SENTENCE_BOUNDARY = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9\"'(])|\n+")
+# "Section N:" headers added when chunked HuggingFace summaries are joined.
+_SECTION_HEADER = re.compile(r"Section \d+:")
 
 class SummarizationService:
     def __init__(self):
@@ -287,18 +293,20 @@ class SummarizationService:
         return summary, time.time() - start_time, tokens_used
 
     def _apply_format(self, summary: str, format_type: str) -> str:
+        # Only used for HuggingFace, whose summarization models ignore prompts:
+        # the format is approximated by post-processing plain prose. Ollama and
+        # OpenAI get the format through the prompt (see _get_prompt) instead.
         if format_type == "bullet_points":
-            sentences = summary.split(". ")
             bullet_points = []
-            for sentence in sentences:
-                sentence = sentence.strip()
-                if len(sentence) > 10:
-                    clean_sentence = sentence
-                    if clean_sentence.startswith("The "):
-                        clean_sentence = clean_sentence[4:]
-                    if clean_sentence.startswith("This "):
-                        clean_sentence = clean_sentence[5:]
-                    bullet_points.append(f"- {clean_sentence.capitalize()}")
+            for sentence in _SENTENCE_BOUNDARY.split(summary.strip()):
+                sentence = sentence.strip().lstrip("-*• ").strip()
+                if len(sentence) <= 10 or _SECTION_HEADER.fullmatch(sentence):
+                    continue
+                for prefix in ("The ", "This "):
+                    if sentence.startswith(prefix):
+                        sentence = sentence[len(prefix) :]
+                        break
+                bullet_points.append(f"- {sentence[:1].upper()}{sentence[1:]}")
             return "\n".join(bullet_points) if bullet_points else summary
 
         if format_type == "academic_tone":
