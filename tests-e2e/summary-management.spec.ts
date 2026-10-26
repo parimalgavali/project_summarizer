@@ -12,8 +12,8 @@ test.beforeEach(async ({ request, page }) => {
   approvedSummaryId = await setupSummary(request, documentId, 'bullet_points');
   await setupApproval(request, approvedSummaryId, 'approved');
   await page.goto('/');
-  await page.getByRole('button', { name: 'Summaries', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Summaries' })).toBeVisible();
+  await page.getByRole('navigation').getByRole('button', { name: /Summaries/ }).click();
+  await expect(page.getByRole('heading', { name: 'Summaries', exact: true })).toBeVisible();
 });
 
 test.describe('Summary Management', () => {

@@ -1,21 +1,26 @@
 import { useState, useEffect } from "react";
-import type { Audio, Summary } from "../lib/api";
-import { getAllAudios, generateAudio, downloadAudio, deleteAudio, getAllSummaries, getAllDocuments, generateAudioFromDocument } from "../lib/api";
+import type { Audio } from "../lib/api";
+import { downloadAudio } from "../lib/api";
+import {
+  EMPTY_LIST,
+  useAudios,
+  useDeleteAudio,
+  useDocuments,
+  useGenerateAudio,
+  useGenerateAudioFromDocument,
+  useSummaries,
+} from "../lib/queries";
 import AudioPlayerModal from "./AudioPlayerModal";
-
-interface BackendDocument {
-  id: string;
-  filename: string;
-  file_size: number;
-  extraction_status: string;
-  word_count: number | null;
-  created_at: string | null;
-}
+import QueryStatus from "./QueryStatus";
 
 export default function AudioList() {
-  const [audios, setAudios] = useState<Audio[]>([]);
-  const [summaries, setSummaries] = useState<Summary[]>([]);
-  const [documents, setDocuments] = useState<BackendDocument[]>([]);
+  const audiosQuery = useAudios();
+  const audios = audiosQuery.data ?? EMPTY_LIST;
+  const summaries = useSummaries().data ?? EMPTY_LIST;
+  const documents = useDocuments().data ?? EMPTY_LIST;
+  const generateAudioMutation = useGenerateAudio();
+  const generateFromDocumentMutation = useGenerateAudioFromDocument();
+  const deleteAudioMutation = useDeleteAudio();
   const [filteredAudios, setFilteredAudios] = useState<Audio[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<keyof Audio>('created_at');
@@ -26,31 +31,8 @@ export default function AudioList() {
   const [selectedFormat, setSelectedFormat] = useState<string>('short_text');
   const [modalTab, setModalTab] = useState<'summary' | 'document'>('summary');
   const [generating, setGenerating] = useState(false);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [playerModalOpen, setPlayerModalOpen] = useState(false);
   const [selectedAudio, setSelectedAudio] = useState<Audio | null>(null);
-
-  // Fetch data on component mount and when refreshTrigger changes
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [audiosResponse, summariesResponse, documentsResponse] = await Promise.all([
-          getAllAudios(),
-          getAllSummaries(),
-          getAllDocuments()
-        ]);
-        setAudios(audiosResponse.data || []);
-        setSummaries(summariesResponse.data || []);
-        setDocuments(documentsResponse.data || []);
-      } catch (error) {
-        console.error("Failed to fetch audio data:", error);
-      }
-    };
-
-    fetchData();
-  }, [refreshTrigger]);
-
-  const refreshData = () => setRefreshTrigger(prev => prev + 1);
 
   // Filter and sort audios
   useEffect(() => {
@@ -111,8 +93,7 @@ export default function AudioList() {
 
     setGenerating(true);
     try {
-      await generateAudio(selectedSummaryId);
-      refreshData();
+      await generateAudioMutation.mutateAsync(selectedSummaryId);
       setGenerateModalOpen(false);
       setSelectedSummaryId('');
     } catch (error) {
@@ -128,8 +109,10 @@ export default function AudioList() {
 
     setGenerating(true);
     try {
-      await generateAudioFromDocument(selectedDocumentId, selectedFormat);
-      refreshData();
+      await generateFromDocumentMutation.mutateAsync({
+        documentId: selectedDocumentId,
+        formatType: selectedFormat,
+      });
       setGenerateModalOpen(false);
       setSelectedDocumentId('');
       setSelectedFormat('short_text');
@@ -166,8 +149,7 @@ export default function AudioList() {
   const handleDeleteAudio = async (audioId: string) => {
     if (window.confirm('Are you sure you want to delete this audio?')) {
       try {
-        await deleteAudio(audioId);
-        refreshData();
+        await deleteAudioMutation.mutateAsync(audioId);
       } catch (error) {
         console.error('Failed to delete audio:', error);
         alert('Failed to delete audio. Please try again.');
@@ -222,7 +204,14 @@ export default function AudioList() {
         </div>
       </div>
 
-      {filteredAudios.length === 0 ? (
+      {audiosQuery.isPending || (audiosQuery.isError && !audiosQuery.data) ? (
+        <QueryStatus
+          label="audios"
+          isPending={audiosQuery.isPending}
+          error={audiosQuery.error}
+          onRetry={() => audiosQuery.refetch()}
+        />
+      ) : filteredAudios.length === 0 ? (
         <p style={{ color: '#888', padding: '2rem' }}>
           {searchTerm ? 'No audios match your search.' : 'No audios available.'}
         </p>

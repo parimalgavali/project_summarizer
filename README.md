@@ -50,10 +50,16 @@ A comprehensive full-stack application designed to extract text from documents, 
 4. ```pip install -r requirements.txt``` on first-time use
 5. Install Docker desktop and have it running, then run the following command. NB! replace user and password with your own postgres credentials.  
 ```docker run -d --name postgres16 -e POSTGRES_DB=summarizer -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=password -p 5432:5432 postgres:16```
-6. ```uvicorn app.main:app --reload```
+6. Set `DATABASE_URL` (required, no default), e.g. in `backend/.env`:
+```DATABASE_URL=postgresql://postgres:password@localhost:5432/summarizer```
+7. ```alembic upgrade head``` to create/upgrade the schema (run again after pulling new migrations)
+8. ```uvicorn app.main:app --reload```
 pip install pydantic-settings, if any errors
 → runs at http://localhost:8000 / http://127.0.0.1:8000
 Swagger UI is available at http://localhost:8000/docs
+
+Backend tests (need a reachable Postgres; the test database is dropped/recreated):
+```pip install -r requirements-dev.txt && TEST_DATABASE_URL=postgresql://postgres:password@localhost:5432/summarizer_test pytest```
 
 ### Frontend
 1. ```cd frontend```

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { deleteDocument } from "../lib/api";
+import { useDeleteDocument } from "../lib/queries";
 
 interface BackendDocument {
   id: string;
@@ -12,11 +12,11 @@ interface BackendDocument {
 
 interface DocumentListProps {
   documents: BackendDocument[];
-  onDocumentAction?: () => Promise<void>;
   onNavigateToSummaries?: (documentId: string, documentFilename: string) => void;
 }
 
-export default function DocumentList({ documents, onDocumentAction, onNavigateToSummaries }: DocumentListProps) {
+export default function DocumentList({ documents, onNavigateToSummaries }: DocumentListProps) {
+  const deleteDocumentMutation = useDeleteDocument();
   const [filteredDocs, setFilteredDocs] = useState<BackendDocument[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<keyof BackendDocument>('created_at');
@@ -73,10 +73,7 @@ export default function DocumentList({ documents, onDocumentAction, onNavigateTo
   const handleDelete = async (documentId: string, filename: string) => {
     if (window.confirm(`Are you sure you want to delete "${filename}" and all its summaries?`)) {
       try {
-        await deleteDocument(documentId);
-        if (onDocumentAction) {
-          await onDocumentAction();
-        }
+        await deleteDocumentMutation.mutateAsync(documentId);
       } catch (error) {
         console.error('Failed to delete document:', error);
         alert('Failed to delete document. Please try again.');

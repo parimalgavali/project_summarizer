@@ -20,8 +20,7 @@ class Settings(BaseSettings):
     # Application settings
     APP_NAME: str = "Document Summarizer API"
     APP_VERSION: str = os.getenv("APP_VERSION", "0.1.0")
-    # APP_VERSION: str = "0.1.0"
-    DEBUG: bool = True
+    DEBUG: bool = False
 
     # API settings
     API_V1_PREFIX: str = "/api/v1"
@@ -67,8 +66,11 @@ class Settings(BaseSettings):
     MAX_KEY_FINDINGS: int = 10
     ENABLE_INLINE_EDITING: bool = True
 
-    # Database
-    DATABASE_URL: str = "postgresql://postgres:sql@localhost/summarizer"
+    # Database (required, e.g. postgresql://user:password@host:5432/summarizer)
+    DATABASE_URL: str
+    # Run Base.metadata.create_all on startup (test/dev convenience only;
+    # use `alembic upgrade head` everywhere else)
+    DB_AUTO_CREATE: bool = False
 
     # Logging
     LOG_LEVEL: str = "INFO"

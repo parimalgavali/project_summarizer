@@ -30,13 +30,19 @@ services:
     networks:
       - summary-network
     depends_on:
-      - postgres  # Postgres starts before the backend
+      postgres:
+        condition: service_healthy  # migrations run on backend start
 
   # 3. Postgres Database Service
   postgres:
     image: postgres:16
     container_name: summary-postgres
     restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-summarizer}"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
     env_file:
       - ./.env
     volumes:

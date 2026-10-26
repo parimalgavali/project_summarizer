@@ -2,13 +2,15 @@ import { useState, useEffect, useCallback } from "react";
 import {
   getDocumentSummaries,
   getAudiosBySummaryId,
-  regenerateSummary,
-  deleteSummary,
-  editSummary,
-  updateApproval,
   type Summary,
   type Audio
 } from "../lib/api";
+import {
+  useDeleteSummary,
+  useEditSummary,
+  useRegenerateSummary,
+  useUpdateApproval,
+} from "../lib/queries";
 
 interface DocumentSummariesModalProps {
   isOpen: boolean;
@@ -34,6 +36,15 @@ export default function DocumentSummariesModal({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState<string>("");
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
+  const deleteSummaryMutation = useDeleteSummary();
+  const editSummaryMutation = useEditSummary();
+  const regenerateSummaryMutation = useRegenerateSummary();
+  const updateApprovalMutation = useUpdateApproval();
+
+  const mergeSummary = (updated: Partial<Summary> & { id: string }) =>
+    setSummaries((items) =>
+      items.map((item) => (item.id === updated.id ? { ...item, ...updated } : item))
+    );
 
   const fetchDocumentSummaries = useCallback(async () => {
     setLoading(true);
@@ -80,9 +91,8 @@ export default function DocumentSummariesModal({
   const handleDeleteSummary = async (summaryId: string) => {
     if (window.confirm('Are you sure you want to delete this summary?')) {
       try {
-        await deleteSummary(summaryId);
-        // Refresh summaries by refetching
-        fetchDocumentSummaries();
+        await deleteSummaryMutation.mutateAsync(summaryId);
+        setSummaries((items) => items.filter((item) => item.id !== summaryId));
         setExpandedAction(null); // Close actions panel
       } catch (error) {
         console.error('Failed to delete summary:', error);
@@ -132,9 +142,11 @@ export default function DocumentSummariesModal({
     if (!editText.trim()) return;
 
     try {
-      await editSummary(summary.id, editText.trim());
-      // Refresh summaries
-      fetchDocumentSummaries();
+      const updated = await editSummaryMutation.mutateAsync({
+        summaryId: summary.id,
+        text: editText.trim(),
+      });
+      mergeSummary(updated);
       setEditingId(null);
       setEditText("");
     } catch (error) {
@@ -147,9 +159,7 @@ export default function DocumentSummariesModal({
     setRegeneratingId(summaryId);
     setExpandedAction(null); // Close actions panel
     try {
-      await regenerateSummary(summaryId);
-      // Refresh summaries
-      fetchDocumentSummaries();
+      mergeSummary(await regenerateSummaryMutation.mutateAsync(summaryId));
     } catch (error) {
       console.error('Failed to regenerate summary:', error);
       alert('Failed to regenerate summary.');
@@ -160,9 +170,7 @@ export default function DocumentSummariesModal({
 
   const handleApprove = async (summaryId: string, status: "approved" | "final_approved" | "rejected") => {
     try {
-      await updateApproval(summaryId, status);
-      // Refresh summaries
-      fetchDocumentSummaries();
+      mergeSummary(await updateApprovalMutation.mutateAsync({ summaryId, status }));
       setExpandedAction(null); // Close actions panel
     } catch (error) {
       console.error('Failed to update approval status:', error);

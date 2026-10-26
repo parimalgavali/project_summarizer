@@ -5,17 +5,13 @@ import DocumentList from "./components/DocumentList";
 import SummaryList from "./components/SummaryList";
 import AudioList from "./components/AudioList";
 import DocumentSummariesModal from "./components/DocumentSummariesModal";
-import { getAllDocuments, getAllSummaries } from "./lib/api";
-import type { Summary } from "./lib/api";
-
-interface BackendDocument {
-  id: string;
-  filename: string;
-  file_size: number;
-  extraction_status: string;
-  word_count: number | null;
-  created_at: string | null;
-}
+import QueryStatus from "./components/QueryStatus";
+import {
+  EMPTY_LIST,
+  useDocuments,
+  useInvalidateDocuments,
+  useSummaries,
+} from "./lib/queries";
 
 type ActiveTab = "documents" | "summaries" | "audio";
 
@@ -30,34 +26,20 @@ export default function App() {
     const stored = localStorage.getItem("activeTab");
     return stored === "summaries" || stored === "audio" ? stored : "documents";
   });
-  const [documents, setDocuments] = useState<BackendDocument[]>([]);
-  const [summaries, setSummaries] = useState<Summary[]>([]);
+  const documentsQuery = useDocuments();
+  const summariesQuery = useSummaries();
+  const invalidateDocuments = useInvalidateDocuments();
+  const documents = documentsQuery.data ?? EMPTY_LIST;
+  const summaries = summariesQuery.data ?? EMPTY_LIST;
   const [documentFilter, setDocumentFilter] = useState<string | null>(null);
   const [modalDocument, setModalDocument] = useState<{
     id: string;
     filename: string;
   } | null>(null);
 
-  const refreshData = async () => {
-    try {
-      const [docsResponse, summariesResponse] = await Promise.all([
-        getAllDocuments(),
-        getAllSummaries(),
-      ]);
-      setDocuments(docsResponse.data || []);
-      setSummaries(summariesResponse.data || []);
-    } catch (error) {
-      console.error("Failed to refresh workspace data:", error);
-    }
-  };
-
   useEffect(() => {
     localStorage.setItem("activeTab", activeTab);
   }, [activeTab]);
-
-  useEffect(() => {
-    refreshData();
-  }, []);
 
   const approvedSummaries = useMemo(
     () =>
@@ -160,12 +142,12 @@ export default function App() {
         <section className="metric-grid" aria-label="Workspace metrics">
           <div className="metric-card">
             <span>Documents</span>
-            <strong>{documents.length}</strong>
+            <strong>{documentsQuery.isPending ? "—" : documents.length}</strong>
             <small>{readyDocuments} ready for AI</small>
           </div>
           <div className="metric-card">
             <span>Summaries</span>
-            <strong>{summaries.length}</strong>
+            <strong>{summariesQuery.isPending ? "—" : summaries.length}</strong>
             <small>{approvedSummaries} approved outputs</small>
           </div>
           <div className="metric-card">
@@ -194,21 +176,34 @@ export default function App() {
 
           {activeTab === "documents" && (
             <>
-              <UploadPanel onUpload={refreshData} />
-              <DocumentList
-                documents={documents}
-                onDocumentAction={refreshData}
-                onNavigateToSummaries={openDocumentSummariesModal}
+              <UploadPanel onUpload={invalidateDocuments} />
+              <QueryStatus
+                label="documents"
+                isPending={documentsQuery.isPending}
+                error={documentsQuery.error}
+                onRetry={() => documentsQuery.refetch()}
               />
+              {documentsQuery.data && (
+                <DocumentList
+                  documents={documents}
+                  onNavigateToSummaries={openDocumentSummariesModal}
+                />
+              )}
             </>
           )}
 
           {activeTab === "summaries" && (
-            <SummaryList
-              summaries={summaries}
-              onSummaryAction={refreshData}
-              documentFilter={documentFilter}
-            />
+            <>
+              <QueryStatus
+                label="summaries"
+                isPending={summariesQuery.isPending}
+                error={summariesQuery.error}
+                onRetry={() => summariesQuery.refetch()}
+              />
+              {summariesQuery.data && (
+                <SummaryList summaries={summaries} documentFilter={documentFilter} />
+              )}
+            </>
           )}
 
           {activeTab === "audio" && <AudioList />}

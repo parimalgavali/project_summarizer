@@ -2,7 +2,7 @@ import { APIRequestContext, expect } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const API_BASE = 'http://localhost:6702';
+export const API_BASE = process.env.API_BASE_URL ?? 'http://localhost:6702';
 const RESET_DB_URL = `${API_BASE}/api/testing/reset-db`;
 const UPLOAD_URL = `${API_BASE}/documents/upload`;
 const SUMMARIZE_URL = (docId: string) => `${API_BASE}/documents/${docId}/summarize`;
