@@ -1,6 +1,6 @@
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
@@ -8,7 +8,13 @@ from sqlalchemy.orm import Session
 
 from ..core.config import get_db
 from ..dependencies import get_summarization_service
-from ..models import ApprovalRequest, EditRequest, SummarizeRequest, SummaryResponse
+from ..models import (
+    ApprovalRequest,
+    EditRequest,
+    RegenerateRequest,
+    SummarizeRequest,
+    SummaryResponse,
+)
 from ..models.database import Audio, Document, Summary
 from ..services.summarization import SummarizationService
 from .common import (
@@ -112,7 +118,7 @@ async def summarize_document(
             llm_model=model_name,
             processing_time_seconds=processing_time,
             tokens_used=tokens_used,
-            created_at=datetime.utcnow().isoformat(),
+            created_at=datetime.now(timezone.utc).isoformat(),
             approval_status="pending",
         )
 
@@ -178,7 +184,7 @@ def update_approval(
 @router.post("/summaries/{summary_id}/regenerate")
 async def regenerate_summary(
     summary_id: str,
-    request: dict | None = None,
+    request: RegenerateRequest = RegenerateRequest(),
     db: Session = Depends(get_db),
     summarizer: SummarizationService = Depends(get_summarization_service),
 ):
@@ -195,11 +201,7 @@ async def regenerate_summary(
         raise HTTPException(status_code=400, detail="Document text not extracted yet")
 
     try:
-        format_type = (
-            request.get("format_type", summary.summary_type)
-            if request
-            else summary.summary_type
-        )
+        format_type = request.format_type or summary.summary_type
 
         summary_text, processing_time, tokens_used = await run_in_threadpool(
             summarizer.summarize_text, doc.extracted_text, format_type
