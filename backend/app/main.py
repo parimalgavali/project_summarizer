@@ -803,12 +803,12 @@ async def download_audio(audio_id: str, db: Session = Depends(get_db)):
     if not audio.audio_file_path or not os.path.exists(audio.audio_file_path):
         raise HTTPException(status_code=404, detail="Audio file not found")
 
-        return FileResponse(
-            path=audio.audio_file_path,
-            media_type=mimetypes.guess_type(audio.audio_file_path)[0]
-            or "application/octet-stream",
-            filename=f"summary_audio_{audio_id}.{audio.audio_format}",
-        )
+    return FileResponse(
+        path=audio.audio_file_path,
+        media_type=mimetypes.guess_type(audio.audio_file_path)[0]
+        or "application/octet-stream",
+        filename=f"summary_audio_{audio_id}.{audio.audio_format}",
+    )
 
 
 @app.delete("/audios/{audio_id}")
