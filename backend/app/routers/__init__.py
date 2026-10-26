@@ -1,3 +1,3 @@
-from . import audio, documents, summaries, testing
+from . import audio, documents, search, summaries, testing
 
-__all__ = ["audio", "documents", "summaries", "testing"]
+__all__ = ["audio", "documents", "search", "summaries", "testing"]

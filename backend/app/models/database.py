@@ -2,7 +2,7 @@
 Database models for documents and summaries
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Float
+from sqlalchemy import JSON, Column, Integer, String, DateTime, Text, ForeignKey, Float
 from sqlalchemy.orm import relationship
 import sys
 import os
@@ -10,7 +10,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ..core.config import Base
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class Document(Base):
@@ -81,3 +81,25 @@ class Audio(Base):
     characters_processed = Column(Integer)
 
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+class DocumentChunk(Base):
+    """A slice of a document's extracted text plus its embedding vector."""
+
+    __tablename__ = "document_chunks"
+
+    id = Column(String, primary_key=True)
+    document_id = Column(
+        String, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    chunk_index = Column(Integer, nullable=False)
+    text = Column(Text, nullable=False)
+    # JSON list of floats; similarity is computed in Python (no pgvector needed).
+    embedding = Column(JSON, nullable=False)
+    embedding_model = Column(String, nullable=False)
+
+    created_at = Column(DateTime, default=_utcnow)
