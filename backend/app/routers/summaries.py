@@ -25,6 +25,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Summaries"])
 
 
+def _serialize_with_document(db: Session, summary: Summary) -> dict:
+    document = db.query(Document).filter(Document.id == summary.document_id).first()
+    if document is None:
+        return {"id": summary.id}
+    return serialize_summary(summary, document)
+
+
 @router.post("/documents/{document_id}/preview-summary")
 async def preview_summary(
     document_id: str,
@@ -133,7 +140,10 @@ def edit_summary(summary_id: str, request: EditRequest, db: Session = Depends(ge
     db.commit()
     logger.info("Summary %s edited", summary_id)
 
-    return {"id": summary_id, "message": "Summary edited successfully"}
+    return {
+        **_serialize_with_document(db, summary),
+        "message": "Summary edited successfully",
+    }
 
 
 @router.post("/summaries/{summary_id}/approval")
@@ -204,7 +214,10 @@ async def regenerate_summary(
 
         db.commit()
 
-        return {"message": "Summary regenerated successfully"}
+        return {
+            **serialize_summary(summary, doc),
+            "message": "Summary regenerated successfully",
+        }
 
     except Exception as e:
         db.rollback()

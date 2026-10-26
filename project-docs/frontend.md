@@ -6,11 +6,14 @@
 - TypeScript
 - Vite
 - Axios
+- TanStack Query (`@tanstack/react-query`) for server state
 
 ## Main Entry Points
 
 - `frontend/src/main.tsx` mounts the React app.
-- `frontend/src/App.tsx` defines the primary workbench shell, tab navigation, hero panel, metrics, and data refresh behavior.
+- `frontend/src/main.tsx` also provides the shared `QueryClient`.
+- `frontend/src/App.tsx` defines the primary workbench shell, tab navigation, hero panel, metrics, and loading/error states for the workspace lists.
+- `frontend/src/lib/queries.ts` defines the list queries (`documents`, `summaries`, `audios`) and mutation hooks. Approve/edit/regenerate/delete update only the affected cache entries; uploads and audio generation invalidate just the affected list.
 - `frontend/src/App.css` styles the simplified local-AI workbench.
 - `frontend/src/lib/api.ts` centralizes API calls.
 
@@ -37,6 +40,7 @@ This keeps the app approachable while still showing production-oriented AI featu
 | `AudioList` | Lists generated audio records, supports audio generation, playback, download, and deletion. |
 | `AudioPlayerModal` | Loads audio blobs from the backend and plays them in the browser when the format is supported. |
 | `CustomNameModal` | Captures a custom name for approved summaries. |
+| `QueryStatus` | Shared loading spinner and error-with-retry banner for list queries. |
 
 ## API Configuration
 

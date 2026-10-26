@@ -2,6 +2,18 @@
 
 Base URL in local development is usually `http://localhost:8000`.
 
+## Errors
+
+Failures use a non-2xx status with a JSON body of the form `{"detail": ...}`. Unhandled exceptions return `500` with `{"detail": "Internal server error"}`; details are logged server-side.
+
+## Pagination
+
+`GET /documents`, `GET /summary-list`, and `GET /audio-list` accept `limit` (1-500, default 100) and `offset` (default 0) query parameters, return items newest first, and respond with:
+
+```json
+{ "data": [], "total": 0, "limit": 100, "offset": 0 }
+```
+
 ## Model and Compatibility
 
 ### `GET /v1/models`
@@ -29,7 +41,7 @@ Behavior:
 
 ### `GET /documents`
 
-Returns all uploaded documents with status, file size, word count, and creation timestamp.
+Returns uploaded documents (paginated) with status, file size, word count, and creation timestamp.
 
 ### `DELETE /documents/{document_id}`
 
@@ -55,11 +67,11 @@ Generates a summary and audio directly from a document. The generated summary is
 
 ### `GET /summary-list`
 
-Returns all summaries joined with document filenames.
+Returns summaries (paginated) joined with document filenames.
 
 ### `POST /summaries/{summary_id}/edit`
 
-Updates a summary in place with human-edited text.
+Updates a summary in place with human-edited text. Returns the updated summary (same fields as `GET /summary-list` items) plus `message`.
 
 Body:
 
@@ -81,7 +93,7 @@ Accepted statuses:
 
 ### `POST /summaries/{summary_id}/regenerate`
 
-Regenerates an existing summary with the same or a new format.
+Regenerates an existing summary with the same or a new format. Returns the updated summary plus `message`.
 
 ### `DELETE /summaries/{summary_id}`
 
@@ -91,7 +103,7 @@ Deletes one summary and its dependent audio rows/files.
 
 ### `GET /audio-list`
 
-Returns all generated audio records joined with summary and document metadata.
+Returns generated audio records (paginated) joined with summary and document metadata.
 
 ### `GET /audios?summary_id={summary_id}`
 

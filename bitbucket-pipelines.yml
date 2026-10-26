@@ -39,29 +39,16 @@ pipelines:
               - python -m venv .venv
               - source .venv/bin/activate
               - pip install -r requirements.txt
-              - pip install requests pytest 
+              - pip install -r requirements-dev.txt
 
               # Setup Test Environment Variables
               - export ENV=TEST
-              - export DATABASE_URL=postgresql://postgres:sql@localhost:5432/summarizer
+              - export TEST_DATABASE_URL=postgresql://postgres:sql@localhost:5432/summarizer_test
               - export OPENAI_API_KEY="mock-key"
               - export HF_API_KEY="mock-key"
-              - export PYTHONPATH=$PYTHONPATH:$(pwd)
 
-              # --- TEST 1: Database Integration ---
-              - echo "Running Database Test..."
-              - python test_db.py
-
-              # --- TEST 2: API Integration ---
-              - echo "Starting Background Server for API Test..."
-              # Start uvicorn in the background using nohup
-              - nohup uvicorn main:app --host 0.0.0.0 --port 8000 > uvicorn.log 2>&1 &
-              - sleep 10  
-
-              - echo "Running API Test..."
-              - python test_api.py
-              
-              - cat uvicorn.log
+              # Migrations, API routes, pagination, audio download, error handling
+              - python -m pytest -v
         
         - step:
             name: 'Frontend Building'

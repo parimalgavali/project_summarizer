@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import type { Summary } from "../lib/api";
-import { deleteSummary, editSummary } from "../lib/api";
+import { useDeleteSummary, useEditSummary, useUpsertSummary } from "../lib/queries";
 import GenerateSummaryModal from "./GenerateSummaryModal";
 
 // Simple modal for viewing full summary text
@@ -198,11 +198,13 @@ function SummaryPreviewModal({ summary, isOpen, onClose, onEdit }: { summary: Su
 
 interface SummaryListProps {
   summaries: Summary[];
-  onSummaryAction: () => Promise<void>;
   documentFilter?: string | null;
 }
 
-export default function SummaryList({ summaries, onSummaryAction, documentFilter }: SummaryListProps) {
+export default function SummaryList({ summaries, documentFilter }: SummaryListProps) {
+  const deleteSummaryMutation = useDeleteSummary();
+  const editSummaryMutation = useEditSummary();
+  const upsertSummary = useUpsertSummary();
   const [filteredSummaries, setFilteredSummaries] = useState<Summary[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<keyof Summary>('created_at');
@@ -229,7 +231,7 @@ export default function SummaryList({ summaries, onSummaryAction, documentFilter
       const aVal = a[sortField];
       const bVal = b[sortField];
 
-      if (aVal === null || bVal === null) return 0;
+      if (aVal == null || bVal == null) return 0;
       if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
       if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
       return 0;
@@ -282,8 +284,7 @@ export default function SummaryList({ summaries, onSummaryAction, documentFilter
   const handleDeleteSummary = async (summaryId: string) => {
     if (window.confirm('Are you sure you want to delete this summary?')) {
       try {
-        await deleteSummary(summaryId);
-        await onSummaryAction();
+        await deleteSummaryMutation.mutateAsync(summaryId);
       } catch (error) {
         console.error('Failed to delete summary:', error);
         alert('Failed to delete summary. Please try again.');
@@ -303,8 +304,7 @@ export default function SummaryList({ summaries, onSummaryAction, documentFilter
 
   const handleEditSummary = async (summaryId: string, newText: string) => {
     try {
-      await editSummary(summaryId, newText);
-      await onSummaryAction(); // Refresh the summaries list
+      await editSummaryMutation.mutateAsync({ summaryId, text: newText });
     } catch (error) {
       console.error('Failed to edit summary:', error);
       throw error;
@@ -601,8 +601,8 @@ export default function SummaryList({ summaries, onSummaryAction, documentFilter
       <GenerateSummaryModal
         isOpen={generateModalOpen}
         onClose={() => setGenerateModalOpen(false)}
-        onSummaryGenerated={async () => {
-          await onSummaryAction();
+        onSummaryGenerated={(summary) => {
+          upsertSummary(summary);
           setGenerateModalOpen(false);
         }}
       />

@@ -87,3 +87,27 @@ def test_debug_defaults_to_false(monkeypatch):
 
     monkeypatch.delenv("DEBUG", raising=False)
     assert Settings(_env_file=None, DATABASE_URL="postgresql://x/y").DEBUG is False
+
+
+def test_summary_mutations_return_updated_summary(client, upload):
+    document_id = upload()
+    created = client.post(f"/documents/{document_id}/summarize", json={}).json()
+
+    edited = client.post(
+        f"/summaries/{created['id']}/edit", json={"edited_text": "Edited text here"}
+    )
+    approved = client.post(
+        f"/summaries/{created['id']}/approval",
+        json={"status": "approved", "custom_name": "Renamed"},
+    )
+    regenerated = client.post(f"/summaries/{created['id']}/regenerate", json={})
+
+    assert edited.status_code == 200
+    assert edited.json()["message"] == "Summary edited successfully"
+    assert edited.json()["summary_text"] == "Edited text here"
+    assert edited.json()["llm_model"] == "human-edited"
+    assert approved.json()["approval_status"] == "approved"
+    assert approved.json()["document_filename"] == "Renamed"
+    assert regenerated.json()["message"] == "Summary regenerated successfully"
+    assert regenerated.json()["approval_status"] == "pending"
+    assert regenerated.json()["custom_name"] == "Renamed"

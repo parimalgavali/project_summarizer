@@ -11,8 +11,11 @@
 
 ## Main Entry Points
 
-- `backend/app/main.py` defines FastAPI routes.
-- `backend/app/core/config.py` defines settings, database engine, and session creation.
+- `backend/app/main.py` builds the FastAPI app: lifespan, CORS, logging, the global error handler, and router registration.
+- `backend/app/routers/` holds the `APIRouter` modules: `documents.py`, `summaries.py`, `audio.py`, `testing.py` (mounted under `/api`), plus shared helpers in `common.py`.
+- `backend/app/dependencies.py` provides cached (singleton) `SummarizationService`, `AudioService`, and `TextExtractionService` instances as FastAPI dependencies.
+- `backend/app/core/config.py` defines settings, database engine, session creation, and the `get_db` dependency.
+- `backend/app/core/logging.py` configures the standard `logging` module from `LOG_LEVEL`.
 - `backend/app/models/__init__.py` defines API request/response schemas.
 - `backend/app/models/database.py` defines database tables.
 - `backend/app/storage.py` saves uploaded files.
@@ -39,6 +42,28 @@ TTS_PROVIDER=macos_say
 MACOS_SAY_VOICE=Samantha
 ```
 
+## Configuration
+
+- `DATABASE_URL` is required; there is no default.
+- `DEBUG` defaults to `False`.
+- `LOG_LEVEL` (default `INFO`) controls application logging.
+- `DB_AUTO_CREATE=true` runs `Base.metadata.create_all` on startup. Test/dev convenience only; it does not migrate existing tables.
+
+## Migrations
+
+The schema is managed by Alembic (`backend/alembic/`). From `backend/`:
+
+```bash
+alembic upgrade head                            # apply migrations
+alembic revision --autogenerate -m "describe"   # after changing models/database.py
+```
+
+The Docker image runs `alembic upgrade head` before starting Uvicorn. The initial revision (`0001_initial_schema`) also adopts databases created by the old startup hook: existing tables are kept and missing `summaries.approval_status` / `summaries.custom_name` columns are added.
+
+## Concurrency
+
+Text extraction, summarization (`requests` calls with long timeouts), and TTS are blocking, so routes run them with `fastapi.concurrency.run_in_threadpool` to keep the event loop free.
+
 ## Data Flow
 
 1. `POST /documents/upload` validates and saves the uploaded file.
@@ -55,6 +80,15 @@ MACOS_SAY_VOICE=Samantha
 | `documents` | Uploaded document metadata, file path, extracted text, word count, extraction status. |
 | `summaries` | Generated or edited summaries, model metadata, approval status, optional custom name. |
 | `audios` | Generated audio file path, format, duration, TTS provider/model, processing metadata. |
+
+## Tests
+
+`backend/tests/` contains the pytest suite. It creates a throwaway database from `TEST_DATABASE_URL` (default `postgresql://postgres:sql@localhost:5432/summarizer_test`), migrates it with Alembic, and drops it afterwards.
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
 
 ## Runtime Artifact Policy
 

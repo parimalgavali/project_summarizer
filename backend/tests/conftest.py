@@ -4,12 +4,9 @@ import tempfile
 # Configure the app for tests before any `app` module is imported.
 _TMP = tempfile.mkdtemp(prefix="summarizer-tests-")
 os.environ["ENV"] = "TEST"
-os.environ.setdefault(
-    "DATABASE_URL",
-    os.environ.get(
-        "TEST_DATABASE_URL",
-        "postgresql://postgres:sql@localhost:5432/summarizer_test",
-    ),
+# Never reuse DATABASE_URL: the test database is dropped and recreated.
+os.environ["DATABASE_URL"] = os.environ.get(
+    "TEST_DATABASE_URL", "postgresql://postgres:sql@localhost:5432/summarizer_test"
 )
 os.environ["UPLOAD_DIR"] = os.path.join(_TMP, "uploads")
 os.environ["AUDIO_DIR"] = os.path.join(_TMP, "audio")

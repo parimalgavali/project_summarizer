@@ -13,6 +13,50 @@ export interface UploadResponse {
   summary_word_count?: number;
 }
 
+export interface DocumentRecord {
+  id: string;
+  filename: string;
+  file_size: number;
+  extraction_status: string;
+  word_count: number | null;
+  created_at: string | null;
+}
+
+/** Shape returned by the paginated list endpoints. */
+export interface Page<T> {
+  data: T[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface PageParams {
+  limit?: number;
+  offset?: number;
+}
+
+/** Matches MAX_PAGE_SIZE in backend/app/routers/common.py. */
+export const MAX_PAGE_SIZE = 500;
+
+async function getPage<T>(path: string, params: PageParams): Promise<Page<T>> {
+  const res = await axios.get<Page<T>>(`${API_BASE}${path}`, { params });
+  return res.data;
+}
+
+/** Fetch one page when `params` is given, otherwise every page. */
+async function getList<T>(path: string, params?: PageParams): Promise<Page<T>> {
+  if (params) return getPage<T>(path, params);
+
+  const first = await getPage<T>(path, { limit: MAX_PAGE_SIZE, offset: 0 });
+  const data = [...first.data];
+  while (data.length < first.total) {
+    const next = await getPage<T>(path, { limit: MAX_PAGE_SIZE, offset: data.length });
+    if (next.data.length === 0) break;
+    data.push(...next.data);
+  }
+  return { data, total: first.total, limit: MAX_PAGE_SIZE, offset: 0 };
+}
+
 export interface Summary {
   id: string;
   document_id: string;
@@ -24,8 +68,11 @@ export interface Summary {
   processing_time_seconds: number;
   tokens_used: number;
   approval_status: string;
+  custom_name?: string | null;
   created_at: string;
 }
+
+export type SummaryMutationResponse = Summary & { message: string };
 
 export async function uploadDocument(
   file: File,
@@ -75,14 +122,12 @@ export async function getDocumentSummaries(documentId: string) {
   return res.data;
 }
 
-export async function getAllDocuments() {
-  const res = await axios.get(`${API_BASE}/documents`);
-  return res.data;
+export async function getAllDocuments(params?: PageParams) {
+  return getList<DocumentRecord>("/documents", params);
 }
 
-export async function getAllSummaries() {
-  const res = await axios.get(`${API_BASE}/summary-list`);
-  return res.data;
+export async function getAllSummaries(params?: PageParams) {
+  return getList<Summary>("/summary-list", params);
 }
 
 export async function getLatestSummary(documentId: string) {
@@ -95,20 +140,20 @@ export async function updateApproval(summaryId: string, status: "approved" | "re
     status,
     custom_name: customName
   });
-  return res.data;
+  return res.data as Summary;
 }
 
 export async function editSummary(summaryId: string, editedText: string) {
   const res = await axios.post(`${API_BASE}/summaries/${summaryId}/edit`, {
     edited_text: editedText,
   });
-  return res.data;
+  return res.data as SummaryMutationResponse;
 }
 
 export async function regenerateSummary(summaryId: string, formatType?: string) {
   const payload = formatType ? { format_type: formatType } : {};
   const res = await axios.post(`${API_BASE}/summaries/${summaryId}/regenerate`, payload);
-  return res.data;
+  return res.data as SummaryMutationResponse;
 }
 
 export async function deleteSummary(summaryId: string) {
@@ -134,9 +179,8 @@ export interface Audio {
   created_at: string;
 }
 
-export async function getAllAudios() {
-  const res = await axios.get(`${API_BASE}/audio-list`);
-  return res.data;
+export async function getAllAudios(params?: PageParams) {
+  return getList<Audio>("/audio-list", params);
 }
 
 export async function generateAudio(summaryId: string) {
